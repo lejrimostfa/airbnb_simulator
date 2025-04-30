@@ -1,5 +1,8 @@
 # Simulateur de Location Multi-Appartements
 
+🔗 [Voir le simulateur en ligne](https://lejrimostfa.github.io/airbnb_simulator/SimLoca.html)
+
+
 Un simulateur interactif de revenus, dépenses et profits pour des appartements loués (Airbnb, etc.), avec :
 
 - Configuration de plusieurs appartements  
