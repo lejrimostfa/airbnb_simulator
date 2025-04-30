@@ -141,6 +141,14 @@
           <input type="range" id="occ_amp_factor" min="0" max="3" step="0.1" value="1" />
           <span id="occ_amp_value">1.0</span>
         </label>
+        <label>Translation verticale occupation:
+          <input type="range" id="occ_shift" min="-0.3" max="0.3" step="0.01" value="0" />
+          <span id="occ_shift_value">0</span>
+        </label>
+        <label>Taux de dépenses (%):
+          <input type="range" id="expense_rate" min="0" max="100" step="1" value="30" />
+          <span id="expense_value">30%</span>
+        </label>
       </div>
       <div class="apt-list">
         <table id="apts-table">
@@ -189,11 +197,25 @@
         occVal.textContent = occSlider.value;
         scheduleUpdate();
       });
+      // Bind shift/expense sliders
+      const shiftSlider = document.getElementById('occ_shift');
+      const shiftVal = document.getElementById('occ_shift_value');
+      shiftSlider.addEventListener('input', () => {
+        shiftVal.textContent = shiftSlider.value;
+        scheduleUpdate();
+      });
+      const expSlider = document.getElementById('expense_rate');
+      const expVal = document.getElementById('expense_value');
+      expSlider.addEventListener('input', () => {
+        expVal.textContent = `${expSlider.value}%`;
+        scheduleUpdate();
+      });
       bindRow(document.querySelector('.apt-row'),true);
       document.getElementById('add-apt').addEventListener('click',()=>{ const tbody=document.querySelector('#apts-table tbody'), row=document.createElement('tr'); row.className='apt-row'; row.innerHTML=`<td><input type="range" class="rate" min="0" max="1000" step="5" value="80"/><span class="rate-value">80</span></td><td><input type="range" class="start-slider" min="0" max="${10*12}" step="1" value="0"/><span class="date-value"></span></td><td><button class="remove-apt">–</button></td>`; tbody.appendChild(row); bindRow(row,false);});
       updateChart();
     });
 function updateChart() {
+  // Fetch new slider values
   const years = Number(document.getElementById('n_years').value);
   const N = years * 12;
   const rows = document.querySelectorAll('.apt-row');
@@ -203,6 +225,8 @@ function updateChart() {
   const base = getBaseDate();
   const dark = document.body.classList.contains('dark-mode');
   const amp_occ = amp_occ_base * Number(document.getElementById('occ_amp_factor').value);
+  const occShift = Number(document.getElementById('occ_shift').value);
+  const expenseRate = Number(document.getElementById('expense_rate').value) / 100;
   const apts = Array.from(rows).map((r, i) => ({
     rate: Number(r.querySelector('.rate').value),
     offset: i === 0
@@ -213,7 +237,7 @@ function updateChart() {
   for (let i = 0; i < N; i++) {
     const date = new Date(base.getFullYear(), base.getMonth() + i, 1);
     const m = date.getMonth() + 1;
-    const occ = C_occ + amp_occ * Math.sin(omega * m + phase_occ);
+    const occ = C_occ + occShift + amp_occ * Math.sin(omega * m + phase_occ);
     const days = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
     let monthRev = 0;
     apts.forEach(a => {
@@ -222,7 +246,7 @@ function updateChart() {
         monthRev += occ * days * a.rate;
       }
     });
-    const monthExp = monthRev * 0.3;
+    const monthExp = monthRev * expenseRate;
     const monthProf = monthRev - monthExp;
     cR += monthRev;
     cE += monthExp;
@@ -248,13 +272,40 @@ function updateChart() {
     { x: dates, y: cumP, name: 'Profit cumulé', line: { width: 3 } }
   ];
 
+  // Add markers for apartment introductions
+  const markers = apts.map((apt, i) => {
+    const date = new Date(base.getFullYear(), base.getMonth() + apt.offset, 1);
+    return {
+      x: [date],
+      y: [0],
+      mode: 'markers',
+      name: `Appart ${i + 1}`,
+      marker: { size: 10, symbol: 'circle', color: dark ? '#ff00ff' : '#000' },
+      showlegend: false,
+      xaxis: 'x',
+      yaxis: 'y'
+    };
+  });
+  dataPlot.push(...markers);
+
   const neonColors = ['#39ff14', '#ff00ff', '#00ffff', '#ff4136', '#7f00ff', '#ff851b'];
+  const monthAvg = (cR / N).toFixed(2);
+  const yearAvg = (cR / years).toFixed(2);
   const layout = {
     title: 'Projection financière',
     autosize: true,
     xaxis: { title: 'Date', autorange: true, type: 'date' },
     yaxis: { title: 'Montant (€)', autorange: true },
     colorway: dark ? neonColors : undefined,
+    annotations: [{
+      xref: 'paper',
+      yref: 'paper',
+      x: 1,
+      y: 1.08,
+      showarrow: false,
+      text: `Moyenne mensuelle: ${monthAvg} €, annuelle: ${yearAvg} €`,
+      font: { size: 14, color: dark ? '#39ff14' : '#000' }
+    }],
     ...(dark
       ? {
           plot_bgcolor: '#121212',
@@ -272,7 +323,7 @@ function updateChart() {
   // Plot 1-year occupation cycle
   const occDates = [], occRates = [];
   for (let m = 1; m <= 12; m++) {
-    const rate = C_occ + amp_occ * Math.sin(omega * m + phase_occ);
+    const rate = C_occ + occShift + amp_occ * Math.sin(omega * m + phase_occ);
     occRates.push(rate);
     // use arbitrary year and month, e.g. 2025
     occDates.push(new Date(2025, m-1, 1));
